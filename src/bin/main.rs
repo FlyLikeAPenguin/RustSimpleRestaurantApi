@@ -1,10 +1,17 @@
+use chrono::{DateTime, Duration, Utc};
 use server::ThreadPool;
 use std::fs;
 use std::io::prelude::*;
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::thread;
-use std::time::Duration;
+
+struct OrderItem {
+    id: u64,
+    table_number: u64,
+    order_time: DateTime<Utc>,
+    cooking_time: Duration,
+}
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
@@ -45,10 +52,10 @@ fn build_response_string(status_line: String, contents: String) -> String {
 }
 
 fn handle_path(buffer: [u8; 1024]) -> (&'static str, &'static str) {
-    let get = b"GET / HTTP/1.1\r\n";
+    let index = b"GET / HTTP/1.1\r\n";
     let sleep = b"GET /sleep HTTP/1.1\r\n";
 
-    if buffer.starts_with(get) {
+    if buffer.starts_with(index) {
         ("HTTP/1.1 200 OK", "index.html")
     } else if buffer.starts_with(sleep) {
         thread::sleep(Duration::from_secs(5));
