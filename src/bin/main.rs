@@ -1,4 +1,5 @@
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate lazy_static;
 use chrono::{DateTime, Duration, Utc};
 use server::ThreadPool;
 use std::collections::HashMap;
@@ -58,7 +59,7 @@ fn main() {
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
-        
+
         pool.execute(|| {
             handle_connection(stream);
         });
@@ -91,15 +92,38 @@ fn build_response_string(status_line: String, contents: String) -> String {
 }
 
 fn handle_path(buffer: [u8; 1024]) -> (&'static str, &'static str) {
-    let index = b"GET / HTTP/1.1\r\n";
-    let sleep = b"GET /sleep HTTP/1.1\r\n";
+    let mut headers = [httparse::EMPTY_HEADER; 64];
+    let mut req = httparse::Request::new(&mut headers);
+    let res = req.parse(&buffer).unwrap();
 
-    if buffer.starts_with(index) {
-        ("HTTP/1.1 200 OK", "index.html")
-    } else if buffer.starts_with(sleep) {
-        thread::sleep(std::time::Duration::from_secs(5));
-        ("HTTP/1.1 200 OK", "index.html")
-    } else {
-        ("HTTP/1.1 404 NOT FOUND", "404.html")
+    match req.path {
+        Some(ref path) => {
+            println!("Path: {}", path);
+            let split = path.split_inclusive("/");
+            let parts: Vec<&str> = split.collect();
+
+            if "tables/".eq_ignore_ascii_case(parts.get(1).unwrap()) {
+                if parts.len() == 2 {
+                    // GET tables/     - all items for all tables
+                    ("HTTP/1.1 200 OK", "index.html")
+                } else if parts.len() == 3 {
+                    // POST tables/#No     - add item(s) to table (json blob in body)
+                    // GET tables/#No      - list items for table
+                    let table_number_str = parts.get(2).unwrap().strip_suffix("/").unwrap();
+                    let table_number = table_number_str.to_string().parse::<i32>().unwrap();
+
+                    ("HTTP/1.1 200 OK", "index.html")
+                } else if parts.len() == 4 {
+                    // DELETE tables/#No/OrderItemID   - delete matching order
+                    // GET tables/#No/OrderItemID     - details about a specific order
+                    ("HTTP/1.1 200 OK", "index.html")
+                } else {
+                    ("HTTP/1.1 404 NOT FOUND", "404.html")
+                }
+            } else {
+                ("HTTP/1.1 404 NOT FOUND", "404.html")
+            }
+        }
+        None => ("HTTP/1.1 200 OK", "index.html"),
     }
 }
