@@ -44,8 +44,30 @@ impl Table {
     pub fn new(table_number: u64) -> Self {
         Self {
             table_number: (table_number),
-            orders: Vec::new(),
+            orders: Vec::with_capacity(100),
         }
+    }
+
+    pub fn add_order(&mut self, order: OrderItem) {
+        self.orders.push(order);
+    }
+
+    pub fn delete_order(&mut self, order_item_id: u64) {
+        let index = self
+            .orders
+            .iter()
+            .position(|r| r.id == order_item_id)
+            .unwrap();
+        self.orders.remove(index);
+    }
+
+    pub fn get_order(&mut self, order_item_id: u64) -> &OrderItem {
+        let index = self
+            .orders
+            .iter()
+            .position(|r| r.id == order_item_id)
+            .unwrap();
+        return self.orders.get(index).unwrap();
     }
 }
 
@@ -110,12 +132,17 @@ fn handle_path(buffer: [u8; 1024]) -> (&'static str, &'static str) {
                     // POST tables/#No     - add item(s) to table (json blob in body)
                     // GET tables/#No      - list items for table
                     let table_number_str = parts.get(2).unwrap().strip_suffix("/").unwrap();
-                    let table_number = table_number_str.to_string().parse::<i32>().unwrap();
+                    let table_number = table_number_str.to_string().parse::<u64>().unwrap();
 
                     ("HTTP/1.1 200 OK", "index.html")
                 } else if parts.len() == 4 {
                     // DELETE tables/#No/OrderItemID   - delete matching order
                     // GET tables/#No/OrderItemID     - details about a specific order
+                    let table_number_str = parts.get(2).unwrap().strip_suffix("/").unwrap();
+                    let table_number = table_number_str.to_string().parse::<u64>().unwrap();
+
+                    let order_item_id_str = parts.get(3).unwrap().strip_suffix("/").unwrap();
+                    let order_item_id = order_item_id_str.to_string().parse::<u64>().unwrap();
                     ("HTTP/1.1 200 OK", "index.html")
                 } else {
                     ("HTTP/1.1 404 NOT FOUND", "404.html")
