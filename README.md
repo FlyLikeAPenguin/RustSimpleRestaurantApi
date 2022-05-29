@@ -20,8 +20,9 @@
 
 ---
 
-## Design considerations
+## Design considerations:
 
+To fit with the spirit of the test, I opted to use as few external libraries as possible (Chrono and HTTParse). 
 ---
 
 ## Potential expansion
