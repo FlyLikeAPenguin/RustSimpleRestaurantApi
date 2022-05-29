@@ -14,6 +14,7 @@ use std::time;
 
 static ORDER_COUNT: AtomicU64 = AtomicU64::new(0);
 static TABLE_COUNT: u64 = 100;
+static VIRTUAL_CLIENT_COUNT: u64 = 10;
 
 #[derive(Clone)]
 struct OrderItem {
@@ -83,7 +84,7 @@ fn main() {
     };
     let pool = ThreadPool::new(12);
 
-    for i in 0..10 {
+    for _i in 0..VIRTUAL_CLIENT_COUNT {
         pool.execute(|| {
             virtual_client();
         });
@@ -141,7 +142,7 @@ fn handle_path(
 
             if "tables/".eq_ignore_ascii_case(parts.get(1).unwrap()) {
                 if parts.len() == 3 {
-                    // GET tables/#No      - list items for table
+                    // GET tables/<table_number>      - list items for table
                     let table_number_str = parts.get(2).unwrap();
                     let table_number = table_number_str.to_string().parse::<u64>().unwrap();
                     if "GET".eq_ignore_ascii_case(req.method.unwrap()) {
@@ -158,7 +159,7 @@ fn handle_path(
                     let order_item_id_str = parts.get(3).unwrap();
                     let order_item_id = order_item_id_str.to_string().parse::<u64>().unwrap();
                     if "GET".eq_ignore_ascii_case(req.method.unwrap()) {
-                        // GET tables/#No/OrderItemID     - details about a specific order
+                        // GET tables/<table_number>/<order_item_ID>     - details about a specific order
                         let orders_string: String = get_order_html(
                             &tables
                                 .lock()
@@ -169,7 +170,7 @@ fn handle_path(
                         );
                         return ("HTTP/1.1 200 OK", "table.html", orders_string);
                     } else if "DELETE".eq_ignore_ascii_case(req.method.unwrap()) {
-                        // DELETE tables/#No/OrderItemID   - delete matching order
+                        // DELETE tables/<table_number>/<order_item_ID>   - delete matching order
                         let _ = &tables
                             .lock()
                             .unwrap()
@@ -187,7 +188,7 @@ fn handle_path(
                     if "AddItem/".eq_ignore_ascii_case(parts.get(3).unwrap())
                         && "POST".eq_ignore_ascii_case(req.method.unwrap())
                     {
-                        // POST tables/#No/AddItem/#No     - add item to table
+                        // POST tables/<table_number>/AddItem/<menu_item_ID>     - add item to table
                         let table_number_str = parts.get(2).unwrap().strip_suffix("/").unwrap();
                         let table_number = table_number_str.to_string().parse::<u64>().unwrap();
                         let menu_item_id_str = parts.get(4).unwrap();
@@ -215,7 +216,7 @@ fn handle_path(
                 ("HTTP/1.1 404 NOT FOUND", "404.html", "".to_owned())
             }
         }
-        None => ("HTTP/1.1 200 OK", "index.html", "".to_owned()),
+        None => ("HTTP/1.1 404 NOT FOUND", "404.html", "".to_owned()),
     }
 }
 

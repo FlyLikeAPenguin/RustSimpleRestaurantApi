@@ -14,7 +14,7 @@
 1. `GET /`
 2. `GET tables/<table_number>`
 3. `GET tables/<table_number>/<order_item_ID>`
-4. `POST tables/<table_number>/<menu_item_ID>`
+4. `POST tables/<table_number>/AddItem/<menu_item_ID>`
 5. `DELETE tables/<table_number>/<order_item_ID>`
 
 ---
