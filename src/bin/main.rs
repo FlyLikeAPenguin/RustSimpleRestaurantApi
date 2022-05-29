@@ -1,4 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
+use rand::Rng;
 use server::ThreadPool;
 use std::collections::HashMap;
 use std::fs;
@@ -8,8 +9,11 @@ use std::net::TcpStream;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::thread;
+use std::time;
 
 static ORDER_COUNT: AtomicU64 = AtomicU64::new(0);
+static TABLE_COUNT: u64 = 100;
 
 #[derive(Clone)]
 struct OrderItem {
@@ -72,12 +76,18 @@ fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     let tables: Arc<Mutex<HashMap<u64, Table>>> = {
         let m = Arc::new(Mutex::new(HashMap::new()));
-        for i in 0..100 {
+        for i in 0..TABLE_COUNT {
             m.lock().unwrap().insert(i, Table::new(i));
         }
         m
     };
-    let pool = ThreadPool::new(4);
+    let pool = ThreadPool::new(12);
+
+    for i in 0..10 {
+        pool.execute(|| {
+            virtual_client();
+        });
+    }
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
@@ -122,7 +132,7 @@ fn handle_path(
 
     match req.path {
         Some(ref path) => {
-            println!("Path: {}", path);
+            println!("{} - {}", req.method.unwrap(), path);
             let split = path.split_inclusive("/");
             let parts: Vec<&str> = split.collect();
             if parts.len() == 1 {
@@ -130,10 +140,7 @@ fn handle_path(
             }
 
             if "tables/".eq_ignore_ascii_case(parts.get(1).unwrap()) {
-                if parts.len() == 2 {
-                    // GET tables/     - all items for all tables
-                    ("HTTP/1.1 200 OK", "index.html", "".to_owned())
-                } else if parts.len() == 3 {
+                if parts.len() == 3 {
                     // GET tables/#No      - list items for table
                     let table_number_str = parts.get(2).unwrap();
                     let table_number = table_number_str.to_string().parse::<u64>().unwrap();
@@ -146,14 +153,12 @@ fn handle_path(
                         ("HTTP/1.1 200 OK", "index.html", "".to_owned())
                     }
                 } else if parts.len() == 4 {
-                    // DELETE tables/#No/OrderItemID   - delete matching order
-                    // GET tables/#No/OrderItemID     - details about a specific order
                     let table_number_str = parts.get(2).unwrap().strip_suffix("/").unwrap();
                     let table_number = table_number_str.to_string().parse::<u64>().unwrap();
-
                     let order_item_id_str = parts.get(3).unwrap();
                     let order_item_id = order_item_id_str.to_string().parse::<u64>().unwrap();
                     if "GET".eq_ignore_ascii_case(req.method.unwrap()) {
+                        // GET tables/#No/OrderItemID     - details about a specific order
                         let orders_string: String = get_order_html(
                             &tables
                                 .lock()
@@ -164,6 +169,7 @@ fn handle_path(
                         );
                         return ("HTTP/1.1 200 OK", "table.html", orders_string);
                     } else if "DELETE".eq_ignore_ascii_case(req.method.unwrap()) {
+                        // DELETE tables/#No/OrderItemID   - delete matching order
                         let _ = &tables
                             .lock()
                             .unwrap()
@@ -249,4 +255,45 @@ fn get_order_html(order: &OrderItem) -> String {
     );
     html.push_str("\r\n\t\t</ul>");
     return html;
+}
+
+fn virtual_client() {
+    let mut rng = rand::thread_rng();
+    loop {
+        let sleep_length: u64 = rng.gen_range(0, 3000);
+        let get_post_delete: u64 = rng.gen_range(0, 3);
+        let table_number: u64 = rng.gen_range(0, TABLE_COUNT);
+        let menu_item: u64 = rng.gen_range(0, 4);
+        let rand_millis = time::Duration::from_millis(sleep_length);
+        println!("Sleeping for {}ms", sleep_length);
+        thread::sleep(rand_millis);
+
+        let mut stream = TcpStream::connect("localhost:7878").unwrap();
+        let mut request_data = String::new();
+        match get_post_delete {
+            // GET
+            0 => {
+                request_data.push_str(&format!("GET /tables/{} HTTP/1.0", table_number));
+            }
+            // POST
+            1 => {
+                request_data.push_str(&format!(
+                    "POST /tables/{}/AddItem/{} HTTP/1.0",
+                    table_number, menu_item
+                ));
+            }
+            // DELETE
+            2 => {
+                request_data.push_str(&format!("DELETE /tables/{} HTTP/1.0", table_number));
+            }
+            _ => (),
+        }
+        request_data.push_str("\r\n");
+        request_data.push_str("Host: localhost:7878");
+        request_data.push_str("\r\n");
+        request_data.push_str("Connection: close");
+        request_data.push_str("\r\n");
+        request_data.push_str("\r\n");
+        let _request = stream.write_all(request_data.as_bytes());
+    }
 }
