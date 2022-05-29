@@ -297,3 +297,51 @@ fn virtual_client() {
         let _request = stream.write_all(request_data.as_bytes());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_response_string() {
+        assert_eq!(
+            build_response_string("HTTP/1.1 200 OK".to_owned(), "index.html".to_owned()),
+            "HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nindex.html"
+        );
+    }
+
+    #[test]
+    fn test_table_add_order() {
+        let mut table = Table::new(0);
+        let cooking_time = Duration::minutes(5);
+        let order = OrderItem::new(0, 1, cooking_time);
+        table.add_order(order);
+        assert_eq!(table.orders.len(), 1);
+        assert_eq!(table.orders.first().unwrap().table_number, 0);
+        assert_eq!(table.orders.first().unwrap().menu_reference, 1);
+    }
+
+    #[test]
+    fn test_table_get_order() {
+        let mut table = Table::new(0);
+        let cooking_time = Duration::minutes(5);
+        let order = OrderItem::new(0, 1, cooking_time);
+        let order_id = order.id;
+        table.orders.push(order);
+        assert_eq!(table.get_order(order_id).table_number, 0);
+        assert_eq!(table.get_order(order_id).menu_reference, 1);
+    }
+
+    #[test]
+    fn test_table_delete_order() {
+        let mut table = Table::new(0);
+        let cooking_time = Duration::minutes(5);
+        let order = OrderItem::new(0, 1, cooking_time);
+        let order_id = order.id;
+        table.orders.push(order);
+        assert_eq!(table.get_order(order_id).table_number, 0);
+        assert_eq!(table.get_order(order_id).menu_reference, 1);
+        table.delete_order(order_id);
+        assert_eq!(table.orders.len(), 0);
+    }
+}
