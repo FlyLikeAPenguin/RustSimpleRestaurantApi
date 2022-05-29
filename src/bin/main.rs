@@ -1,5 +1,3 @@
-#[macro_use]
-extern crate lazy_static;
 use chrono::{DateTime, Duration, Utc};
 use server::ThreadPool;
 use std::collections::HashMap;
@@ -10,7 +8,6 @@ use std::net::TcpStream;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::thread;
 
 static ORDER_COUNT: AtomicU64 = AtomicU64::new(0);
 
@@ -35,7 +32,6 @@ impl OrderItem {
     }
 }
 
-#[derive(Clone)]
 struct Table {
     table_number: u64,
     orders: Vec<OrderItem>,
@@ -68,14 +64,14 @@ impl Table {
             .iter()
             .position(|r| r.id == order_item_id)
             .unwrap();
-        return self.orders.get(index).unwrap();
+        return self.orders.get_mut(index).unwrap();
     }
 }
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
-    let mut tables: Arc<Mutex<HashMap<u64, Table>>> = {
-        let mut m = Arc::new(Mutex::new(HashMap::new()));
+    let tables: Arc<Mutex<HashMap<u64, Table>>> = {
+        let m = Arc::new(Mutex::new(HashMap::new()));
         for i in 0..100 {
             m.lock().unwrap().insert(i, Table::new(i));
         }
@@ -122,45 +118,31 @@ fn handle_path(
 ) -> (&'static str, &'static str, String) {
     let mut headers = [httparse::EMPTY_HEADER; 64];
     let mut req = httparse::Request::new(&mut headers);
-    let res = req.parse(&buffer).unwrap();
+    let _res = req.parse(&buffer).unwrap();
 
     match req.path {
         Some(ref path) => {
             println!("Path: {}", path);
             let split = path.split_inclusive("/");
             let parts: Vec<&str> = split.collect();
+            if parts.len() == 1 {
+                return ("HTTP/1.1 200 OK", "index.html", "".to_owned());
+            }
 
             if "tables/".eq_ignore_ascii_case(parts.get(1).unwrap()) {
                 if parts.len() == 2 {
                     // GET tables/     - all items for all tables
                     ("HTTP/1.1 200 OK", "index.html", "".to_owned())
                 } else if parts.len() == 3 {
-                    // POST tables/#No     - add item(s) to table (json blob in body)
                     // GET tables/#No      - list items for table
                     let table_number_str = parts.get(2).unwrap();
                     let table_number = table_number_str.to_string().parse::<u64>().unwrap();
-                    if "GET".eq_ignore_ascii_case(req.method.unwrap().trim()) {
-                        println!("GET tables/#No");
+                    if "GET".eq_ignore_ascii_case(req.method.unwrap()) {
                         let orders_string: String = get_order_list_html(
                             &tables.lock().unwrap().get(&table_number).unwrap().orders,
                         );
                         return ("HTTP/1.1 200 OK", "table.html", orders_string);
-                    } else if "POST".eq_ignore_ascii_case(req.method.unwrap()) {
-                        println!("POST tables/#No");
-                        let table_number: &u64 = &5;
-                        let menu_reference = 2;
-                        let cooking_time = Duration::minutes(5);
-                        let order = OrderItem::new(*table_number, menu_reference, cooking_time);
-                        tables
-                            .lock()
-                            .unwrap()
-                            .get_mut(table_number)
-                            .unwrap()
-                            .orders
-                            .push(order);
-                        ("HTTP/1.1 200 OK", "index.html", "".to_owned())
                     } else {
-                        println!("Other tables/#No");
                         ("HTTP/1.1 200 OK", "index.html", "".to_owned())
                     }
                 } else if parts.len() == 4 {
@@ -171,7 +153,55 @@ fn handle_path(
 
                     let order_item_id_str = parts.get(3).unwrap();
                     let order_item_id = order_item_id_str.to_string().parse::<u64>().unwrap();
-                    ("HTTP/1.1 200 OK", "index.html", "".to_owned())
+                    if "GET".eq_ignore_ascii_case(req.method.unwrap()) {
+                        let orders_string: String = get_order_html(
+                            &tables
+                                .lock()
+                                .unwrap()
+                                .get_mut(&table_number)
+                                .unwrap()
+                                .get_order(order_item_id),
+                        );
+                        return ("HTTP/1.1 200 OK", "table.html", orders_string);
+                    } else if "DELETE".eq_ignore_ascii_case(req.method.unwrap()) {
+                        let _ = &tables
+                            .lock()
+                            .unwrap()
+                            .get_mut(&table_number)
+                            .unwrap()
+                            .delete_order(order_item_id);
+                        let orders_string: String = get_order_list_html(
+                            &tables.lock().unwrap().get(&table_number).unwrap().orders,
+                        );
+                        return ("HTTP/1.1 200 OK", "table.html", orders_string);
+                    } else {
+                        ("HTTP/1.1 404 NOT FOUND", "404.html", "".to_owned())
+                    }
+                } else if parts.len() == 5 {
+                    if "AddItem/".eq_ignore_ascii_case(parts.get(3).unwrap())
+                        && "POST".eq_ignore_ascii_case(req.method.unwrap())
+                    {
+                        // POST tables/#No/AddItem/#No     - add item to table
+                        let table_number_str = parts.get(2).unwrap().strip_suffix("/").unwrap();
+                        let table_number = table_number_str.to_string().parse::<u64>().unwrap();
+                        let menu_item_id_str = parts.get(4).unwrap();
+                        let menu_item_id = menu_item_id_str.to_string().parse::<u64>().unwrap();
+                        let menu_reference = menu_item_id;
+                        let cooking_time = Duration::minutes(5);
+                        let order = OrderItem::new(table_number, menu_reference, cooking_time);
+                        tables
+                            .lock()
+                            .unwrap()
+                            .get_mut(&table_number)
+                            .unwrap()
+                            .add_order(order);
+                        let orders_string: String = get_order_list_html(
+                            &tables.lock().unwrap().get(&table_number).unwrap().orders,
+                        );
+                        return ("HTTP/1.1 200 OK", "table.html", orders_string);
+                    } else {
+                        ("HTTP/1.1 404 NOT FOUND", "404.html", "".to_owned())
+                    }
                 } else {
                     ("HTTP/1.1 404 NOT FOUND", "404.html", "".to_owned())
                 }
@@ -186,7 +216,6 @@ fn handle_path(
 fn get_contents(filename: &str, html_to_embed: String) -> String {
     let contents = fs::read_to_string(filename).unwrap();
     let altered_contents = contents.replace("{Placeholder}", &html_to_embed);
-    println!("{}", altered_contents);
     return altered_contents;
 }
 
@@ -194,7 +223,7 @@ fn get_order_list_html(orders: &Vec<OrderItem>) -> String {
     let mut html = "<ul>".to_owned();
     for order in orders.iter() {
         html = format!(
-            "{}\r\n<li>Order ID: {} - Order Table Number: {} - Order Menu Reference: {} - Order Time: {} - Cooking Duration: {}</li>",
+            "{}\r\n\t\t\t<li>Order ID: {} - Order Table Number: {} - Order Menu Reference: {} - Order Time: {} - Cooking Duration: {}</li>",
             html,
             order.id,
             order.table_number,
@@ -203,6 +232,21 @@ fn get_order_list_html(orders: &Vec<OrderItem>) -> String {
             order.cooking_time
         );
     }
-    html.push_str("</ul>");
+    html.push_str("\r\n\t\t</ul>");
+    return html;
+}
+
+fn get_order_html(order: &OrderItem) -> String {
+    let mut html = "<ul>".to_owned();
+    html = format!(
+        "{}\r\n\t\t\t<li>Order ID: {} - Order Table Number: {} - Order Menu Reference: {} - Order Time: {} - Cooking Duration: {}</li>",
+        html,
+        order.id,
+        order.table_number,
+        order.menu_reference,
+        order.order_time,
+        order.cooking_time
+    );
+    html.push_str("\r\n\t\t</ul>");
     return html;
 }
