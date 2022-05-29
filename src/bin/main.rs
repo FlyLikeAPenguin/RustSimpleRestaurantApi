@@ -230,13 +230,13 @@ fn get_order_list_html(orders: &Vec<OrderItem>) -> String {
     let mut html = "<ul>".to_owned();
     for order in orders.iter() {
         html = format!(
-            "{}\r\n\t\t\t<li>Order ID: {} - Order Table Number: {} - Order Menu Reference: {} - Order Time: {} - Cooking Duration: {}</li>",
+            "{}\r\n\t\t\t<li>Order ID: {} - Order Table Number: {} - Order Menu Reference: {} - Order Time: {} - Cooking Duration: {} minutes</li>",
             html,
             order.id,
             order.table_number,
             order.menu_reference,
             order.order_time,
-            order.cooking_time
+            order.cooking_time.num_minutes()
         );
     }
     html.push_str("\r\n\t\t</ul>");
@@ -246,13 +246,13 @@ fn get_order_list_html(orders: &Vec<OrderItem>) -> String {
 fn get_order_html(order: &OrderItem) -> String {
     let mut html = "<ul>".to_owned();
     html = format!(
-        "{}\r\n\t\t\t<li>Order ID: {} - Order Table Number: {} - Order Menu Reference: {} - Order Time: {} - Cooking Duration: {}</li>",
+        "{}\r\n\t\t\t<li>Order ID: {} - Order Table Number: {} - Order Menu Reference: {} - Order Time: {} - Cooking Duration: {} minutes</li>",
         html,
         order.id,
         order.table_number,
         order.menu_reference,
         order.order_time,
-        order.cooking_time
+        order.cooking_time.num_minutes()
     );
     html.push_str("\r\n\t\t</ul>");
     return html;
