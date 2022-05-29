@@ -43,6 +43,10 @@ This could also be improved by having some kind of non-volatile data store, like
 
 To store the tables (and their contained orders), I use Arc to give each thread a reference to the hashmap on the heap. I then used Mutex to ensure that only one thread can access the store at any time so that it can be used across threads safely.
 
+### Virtual Clients
+
+The virtual clients all run in their own threads, doing random web queries to mimic real clients. They trigger at random intervals, and perform GET, POST, and DELETE requests.
+
 ---
 
 ## Potential expansion/improvement
@@ -54,3 +58,4 @@ There are a number of ways this solution could be improved, for example:
 - Separation of concerns through splitting the data storage, view, and "controller" into separate modules.
 - Better handling of "panicing" methods. Using `unwrap` everywhere isn't ideal when you can handle the error more gracefully.
 - Using a better HTTP library would allow a much richer api, probably opting to use the body or query params for providing data, rather than a `/<id>` approach.
+- A structure that lends itself more to unit-test'ability. 
